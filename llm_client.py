@@ -9,17 +9,31 @@ client = OpenAI(
     base_url="https://api.groq.com/openai/v1",
 )
 
-def generate_response(user_query: str, prompt: str):
-    # Changed from responses.create to chat.completions.create
-    response = client.chat.completions.create(
-        messages=[
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": user_query},
-        ],
-        model="llama-3.1-8b-instant", # Ensure you use a valid Groq model ID
-        max_tokens=200,         # Changed from tokens=200
-    )
-    # Correct way to access the string content
-    return response.choices[0].message.content
+def generate_response(user_query: str, prompt: str, chat_history: list = None) -> str:
+    """
+    Generate a response from the Groq LLM.
 
-# print(generate_response("Hi How are you", "You are a helpful assistant."))
+    Args:
+        user_query   : The current user message.
+        prompt       : The system-level instruction prompt.
+        chat_history : Optional list of previous messages in the format
+                       [{"role": "user"|"assistant", "content": "..."}]
+                       Injected between the system prompt and the current query.
+    Returns:
+        The LLM's response as a plain string.
+    """
+    messages = [{"role": "system", "content": prompt}]
+
+    # Inject conversation history (if any) before the current query
+    if chat_history:
+        messages.extend(chat_history)
+
+    # Append the current user query at the end
+    messages.append({"role": "user", "content": user_query})
+
+    response = client.chat.completions.create(
+        messages=messages,
+        model="llama-3.1-8b-instant",
+        max_tokens=512,
+    )
+    return response.choices[0].message.content

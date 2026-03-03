@@ -77,53 +77,61 @@ def ingest():
     client     = PersistentClient(path=CHROMA_DIR)
     collection = client.get_or_create_collection(name=COLLECTION)
 
-    # 3. Scan each module folder
+    # 3. Scan flat data directory
     print(f"[3/4] Scanning data directory: {DATA_DIR}\n")
     total_chunks = 0
+    
+    if not os.path.isdir(DATA_DIR):
+        print(f"  [ERROR] Data directory not found: {DATA_DIR}")
+        return
 
-    for module in VALID_MODULES:
-        module_dir = os.path.join(DATA_DIR, module)
+    pdf_files = [f for f in os.listdir(DATA_DIR) if f.lower().endswith(".pdf")]
+    if not pdf_files:
+        print(f"  [ERROR] No PDFs found in {DATA_DIR}")
+        return
 
-        if not os.path.isdir(module_dir):
-            print(f"  [SKIP] Folder not found: {module_dir}")
+    print(f"  Found {len(pdf_files)} PDF(s) in {DATA_DIR}")
+
+    for pdf_file in pdf_files:
+        pdf_path = os.path.join(DATA_DIR, pdf_file)
+        
+        # Determine the module from the filename prefix
+        # e.g., "admin_mode_guide.pdf" -> "admin_mode"
+        module = None
+        for valid_module in VALID_MODULES:
+            if pdf_file.lower().startswith(valid_module):
+                module = valid_module
+                break
+                
+        if not module:
+            print(f"  [SKIP] Skipping {pdf_file} - Name doesn't start with a valid module (e.g. 'dev_mode_')")
             continue
 
-        pdf_files = [f for f in os.listdir(module_dir) if f.lower().endswith(".pdf")]
-        if not pdf_files:
-            print(f"  [SKIP] No PDFs in: {module_dir}")
+        print(f"    Reading: {pdf_file} (Assigned to: {module}) ...", end=" ")
+
+        raw_text = extract_text_from_pdf(pdf_path)
+        if not raw_text:
+            print("No text extracted, skipping.")
             continue
 
-        print(f"  Module: {module} ({len(pdf_files)} PDF(s))")
+        chunks = split_text(raw_text)
+        print(f"{len(chunks)} chunks")
 
-        for pdf_file in pdf_files:
-            pdf_path = os.path.join(module_dir, pdf_file)
-            print(f"    Reading: {pdf_file} ...", end=" ")
+        # 4. Embed and upsert chunks into ChromaDB
+        for i, chunk in enumerate(chunks):
+            doc_id    = f"{module}__{pdf_file}__{i}"
+            embedding = embedder.encode(chunk).tolist()
 
-            raw_text = extract_text_from_pdf(pdf_path)
-            if not raw_text:
-                print("No text extracted, skipping.")
-                continue
-
-            chunks = split_text(raw_text)
-            print(f"{len(chunks)} chunks")
-
-            # 4. Embed and upsert chunks into ChromaDB
-            for i, chunk in enumerate(chunks):
-                doc_id    = f"{module}__{pdf_file}__{i}"
-                embedding = embedder.encode(chunk).tolist()
-
-                collection.upsert(
-                    ids        =[doc_id],
-                    documents  =[chunk],
-                    embeddings =[embedding],
-                    metadatas  =[{"module": module, "source": pdf_file}],
-                )
-                total_chunks += 1
-
-        print()
+            collection.upsert(
+                ids        =[doc_id],
+                documents  =[chunk],
+                embeddings =[embedding],
+                metadatas  =[{"module": module, "source": pdf_file}],
+            )
+            total_chunks += 1
 
     # 4. Done
-    print(f"[4/4] Ingestion complete! Total chunks stored: {total_chunks}")
+    print(f"\n[4/4] Ingestion complete! Total chunks stored: {total_chunks}")
     print(f"      ChromaDB saved to: {CHROMA_DIR}")
     print("=" * 55)
 

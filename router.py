@@ -25,6 +25,3 @@ def router(user_query: str):
     INSTRUCTION: Return ONLY the module name (e.g., dev_mode). No punctuation or extra words.
     """
     return generate_response(user_query, ROUTER_PROMPT).strip().lower()
-
-# This will now correctly return "general_queries" instead of guessing a Salesforce tool
-print(router("Hi WHICH TEAM REACHED IN SEMI-FINAL OF CRICKET T-20 WORLD CUP 2026?"))

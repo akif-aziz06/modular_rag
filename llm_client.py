@@ -34,6 +34,6 @@ def generate_response(user_query: str, prompt: str, chat_history: list = None) -
     response = client.chat.completions.create(
         messages=messages,
         model="llama-3.1-8b-instant",
-        max_tokens=512,
+        max_tokens=1024,
     )
     return response.choices[0].message.content
